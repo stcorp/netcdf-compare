@@ -1,0 +1,7 @@
+RUN TESTS:
+
+python3 -m nose test.py
+
+NOTE:
+
+requires netcdf4 >= 1.5.4
