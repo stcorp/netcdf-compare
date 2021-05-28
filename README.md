@@ -1,6 +1,6 @@
 # netcdf-compare
 
-Netcdf-compare is a netCDF comparison tool. It comes with a variety of command-line options to determine what exactly should be compared and how. For example, it is possible to compare two specific variables, using specific absolute and/or relative tolerance limits.
+Netcdf-compare is a netCDF comparison tool. It comes with a variety of command-line options to determine what exactly should be compared and how. For example, it is possible to compare only two specific variables, using specific absolute and/or relative tolerance limits.
 
 Netcdf-compare is implemented in Python, using the numpy and netCDF4 libraries.
 
