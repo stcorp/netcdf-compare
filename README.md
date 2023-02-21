@@ -4,7 +4,20 @@ Netcdf-compare is a netCDF comparison tool. It comes with a variety of command-l
 
 Netcdf-compare is implemented in Python, using the numpy and netCDF4 libraries.
 
-# usage
+# Installation
+## From Sources
+```
+> git clone https://github.com/stcorp/netcdf-compare.git
+> pip install ./netcdf-compare
+```
+
+Then verify your installation with:
+```
+> netcdf-compare --help 
+```
+
+
+# Usage
 
     netcdf-compare [-h] [-a PATH] [-A PATH] [-v PATH] [-V PATH] [-g PATH]
                           [-G PATH] [-n] [-s] [-X] [-Y] [-W] [-q] [--atol FLOAT]
@@ -50,3 +63,44 @@ Netcdf-compare is implemented in Python, using the numpy and netCDF4 libraries.
     -by relative path, for example "group" or "group2/varname"
 
     When not referenced by absolute path, there may be multiple matches.
+
+## Output example
+
+Comparing [FCI](https://www.eumetsat.int/mtg-flexible-combined-imager-fci) data to a reference file may give the following output:
+```
+# command
+> netcdf-compare fci-example.nc fci-reference.nc
+```
+
+```
+# output
+GROUP /
+  VAR index_offset
+    MAXIMUM ABSOLUTE VIOLATION: 65465
+      (0,): 13, 84
+    MAXIMUM RELATIVE VIOLATION: 5035.7692307692305
+      (0,): 13, 84
+    TOTAL NUMBER OF VIOLATIONS: 1
+      FIRST 1 OCCURRENCE(S):
+      (0,): 13, 84
+  VAR index
+    DIFFERENT SHAPE (FILE 1: (10,), FILE 2: (74,))
+
+# --snip--
+
+      GROUP quality_channel
+        VAR number_of_noise_warning_pixels
+          ATTRIBUTE long_name
+            FILE 1: Number of pixels with noise_warning flag set
+            FILE 2: Number of  pixels with noise_warning flag set
+        VAR number_of_missing_warning_pixels
+          MAXIMUM ABSOLUTE VIOLATION: 4294917908
+            (0,): 0, 49388
+          TOTAL NUMBER OF VIOLATIONS: 1
+            FIRST 1 OCCURRENCE(S):
+            (0,): 0, 49388
+          ATTRIBUTE long_name
+            FILE 1: Number of pixels with missing_warning flag set
+            FILE 2: Number of  pixels with missing_warning flag set
+
+```
