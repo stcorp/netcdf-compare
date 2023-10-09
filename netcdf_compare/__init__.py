@@ -9,6 +9,7 @@ import warnings
 import sys
 
 import numpy as np
+import numpy.ma as ma
 import netCDF4
 
 
@@ -244,10 +245,10 @@ def compare_variable(v1, v2, args, indent, matches):
 
     # make scalars 1d, so we can use indexing below (e.g. aa[both_nan] = 1)
     if len(a.shape) == 0:
-        if a is np.ma.masked:
-            a = np.ma.MaskedArray(np.nan)
-        if b is np.ma.masked:
-            b = np.ma.MaskedArray(np.nan)
+        if a is ma.masked:
+            a = ma.MaskedArray(np.nan)
+        if b is ma.masked:
+            b = ma.MaskedArray(np.nan)
 
         a = np.atleast_1d(a)
         b = np.atleast_1d(b)
@@ -258,18 +259,18 @@ def compare_variable(v1, v2, args, indent, matches):
 
     # don't compare both masked
     # TODO would be better to use numpy indexing for this and the following instead
-    if isinstance(a, np.ma.MaskedArray) and isinstance(b, np.ma.MaskedArray):
+    if isinstance(a, ma.MaskedArray) and isinstance(b, ma.MaskedArray):
         both_masked = (a.mask & b.mask)
         aa[both_masked] = 1
         bb[both_masked] = 1
 
     # (nan is not equal to nan)
-    both_nan = (np.isnan(aa) & np.isnan(bb)).nonzero()
+    both_nan = ma.filled(np.isnan(aa) & np.isnan(bb), False)
     aa[both_nan] = 1
     bb[both_nan] = 1
 
     # (only compare non-finite)
-    both_finite = (np.isfinite(aa) & np.isfinite(bb)).nonzero()
+    both_finite = ma.filled(np.isfinite(aa) & np.isfinite(bb), False)
     aa[both_finite] = 1
     bb[both_finite] = 1
 
@@ -292,7 +293,7 @@ def compare_variable(v1, v2, args, indent, matches):
     bb = b.copy()
 
     # (avoid divide-by-zero later)
-    both_zero = (np.equal(aa, 0) & np.equal(bb, 0)).nonzero()
+    both_zero = ma.filled(np.equal(aa, 0) & np.equal(bb, 0), False)
     aa[both_zero] = 1
     bb[both_zero] = 1
 
