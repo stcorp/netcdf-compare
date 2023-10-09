@@ -263,19 +263,23 @@ def compare_variable(v1, v2, args, indent, matches):
         both_masked = (a.mask & b.mask)
         aa[both_masked] = 1
         bb[both_masked] = 1
+        both_masked = None
 
     # (nan is not equal to nan)
     both_nan = ma.filled(np.isnan(aa) & np.isnan(bb), False)
     aa[both_nan] = 1
     bb[both_nan] = 1
+    both_nan = None
 
     # (only compare non-finite)
     both_finite = ma.filled(np.isfinite(aa) & np.isfinite(bb), False)
     aa[both_finite] = 1
     bb[both_finite] = 1
+    both_finite = None
 
     violations_array = np.array(~np.equal(aa, bb))  # this converts the array to a non-masked array
     violations = violations_array.nonzero()
+    violations_array = None
 
     if len(violations[0]):
         difference = '    %d NON-FINITE DIFFERENCE(S)' % \
@@ -296,11 +300,13 @@ def compare_variable(v1, v2, args, indent, matches):
     both_zero = ma.filled(np.equal(aa, 0) & np.equal(bb, 0), False)
     aa[both_zero] = 1
     bb[both_zero] = 1
+    both_zero = None
 
     # (ignore nan/inf here)
-    notfinite = (~np.isfinite(aa) | ~np.isfinite(bb)).nonzero()
+    notfinite = ma.filled(~np.isfinite(aa) | ~np.isfinite(bb), False)
     aa[notfinite] = 1
     bb[notfinite] = 1
+    notfinite = None
 
     absaminb = abs(aa-bb)
     aviolations = (absaminb > args.atol).nonzero()
@@ -320,6 +326,7 @@ def compare_variable(v1, v2, args, indent, matches):
 
     # compare using relative tolerance
     reldiff = absaminb / np.minimum(np.abs(aa), np.abs(bb))
+    absaminb = None
     rviolations = (reldiff > args.rtol).nonzero()
 
     if len(rviolations[0]):
@@ -334,6 +341,8 @@ def compare_variable(v1, v2, args, indent, matches):
             else:
                 difference = '      %s: %s, %s' % (t, a[t], b[t])
             differences.append(indent + difference)
+
+    reldiff = None
 
     # logically combine absolute/relative checks
 
