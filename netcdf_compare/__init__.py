@@ -192,6 +192,7 @@ def compare_variable(v1, v2, args, indent, matches):
     # compare a single variable
     differences = []
 
+    # filter for cmd-line args
     var_path = os.path.join(v1.group().path, v1.name)  # TODO windows
 
     if args.variables and not path_match(args, 'variables', var_path, matches):
@@ -207,12 +208,7 @@ def compare_variable(v1, v2, args, indent, matches):
     if args.attributes:
         return differences
 
-    # content
-    a = v1[:]
-    b = v2[:]
-
-    # handle scalar string variables differently
-    #   these are not read as Numpy data types but as Python str objects
+    # compare structure
     if v1.shape != v2.shape:
         difference = '    DIFFERENT SHAPE (FILE 1: %s, FILE 2: %s)' % \
                          (v1.shape, v2.shape)
@@ -233,8 +229,13 @@ def compare_variable(v1, v2, args, indent, matches):
                           var_path)
         return differences
 
-    # scalar
+    # compare scalar data
     if len(v1.shape) == 0:
+        a = v1[:]
+        b = v2[:]
+
+        # handle scalar string variables differently
+        #   these are not read as Numpy data types but as Python str objects
         if isinstance(a, str):
             if a != b:
                 difference = '    DIFFERENT SCALAR STRING CONTENT (FILE 1: %s, '\
@@ -247,13 +248,15 @@ def compare_variable(v1, v2, args, indent, matches):
             a = ma.MaskedArray(np.nan)
         if b is ma.masked:
             b = ma.MaskedArray(np.nan)
-
         a = np.atleast_1d(a)
         b = np.atleast_1d(b)
+
         compare_chunk(a, b, args, indent, differences, var_path)
 
-    # array
+    # compare array data
     else:
+        a = v1[:]
+        b = v2[:]
         compare_chunk(a, b, args, indent, differences, var_path)
 
     return differences
