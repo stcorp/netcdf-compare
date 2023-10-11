@@ -320,7 +320,10 @@ def compare_chunk(a, b, args, indent, differences, var_path):
     bb[notfinite] = 1
     notfinite = None
 
-    absaminb = abs(aa-bb)
+    if np.issubdtype(a.dtype, np.integer):
+        absaminb = abs(aa.astype(np.int64) - bb)  # avoid overflowing type
+    else:
+        absaminb = abs(aa - bb)
     aviolations = (absaminb > args.atol).nonzero()
 
     if len(aviolations[0]):
