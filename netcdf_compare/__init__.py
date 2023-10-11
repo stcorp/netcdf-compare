@@ -218,9 +218,9 @@ def compare_variable(v1, v2, args, indent, matches):
                          (v1.shape, v2.shape)
         differences.append(indent + difference)
 
-    if a.dtype != b.dtype:
+    if v1.dtype != v2.dtype:
         difference = '    DIFFERENT TYPE (FILE 1: %s, FILE 2: %s)' % \
-                         (a.dtype, b.dtype)
+                         (v1.dtype, v2.dtype)
         differences.append(indent + difference)
 
     if differences:
