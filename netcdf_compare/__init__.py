@@ -203,16 +203,16 @@ def compare_variable(v1, v2, args, indent, matches):
     # compare attributes
     attr_differences = compare_attributes(v1, v2, var_path, args,
                                           indent+'  ', matches)
-
+    differences.extend(attr_differences)
     if args.attributes:
-        differences.extend(attr_differences)
         return differences
 
     # content
+    compare_chunk(v1[:], v2[:], args, indent, differences)
+    return differences
 
-    a = v1[:]
-    b = v2[:]
 
+def compare_chunk(a, b, args, indent, differences):
     max_values = args.max_values
 
     # handle scalar string variables differently
@@ -366,7 +366,6 @@ def compare_variable(v1, v2, args, indent, matches):
                 difference = '      %s: %s, %s' % (t, a[t], b[t])
             differences.append(indent + difference)
 
-    differences.extend(attr_differences)
     return differences
 
 
