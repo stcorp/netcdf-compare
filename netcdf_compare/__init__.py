@@ -207,64 +207,61 @@ def compare_variable(v1, v2, args, indent, matches):
     if args.attributes:
         return differences
 
-    # compare shape, type
-    if v1.shape != v2.shape:
-        difference = '    DIFFERENT SHAPE (FILE 1: %s, FILE 2: %s)' % \
-                         (v1.shape, v2.shape)
-        differences.append(indent + difference)
+    # content
+    a = v1[:]
+    b = v2[:]
 
-    if not np.issubdtype(v1.dtype, np.number) or not np.issubdtype(v2.dtype, np.number):
-        if not args.no_warnings:
-            warnings.warn('unsupported data type for variable %s, skipping' % \
-                          var_path)
+    # handle scalar string variables differently
+    #   these are not read as Numpy data types but as Python str objects
+    if isinstance(a, str):
+        if a != b:
+            difference = '    DIFFERENT SCALAR STRING CONTENT (FILE 1: %s, '\
+                'FILE 2: %s)' % (a, b)
+            differences.append(indent + difference)
         return differences
 
-    if v1.dtype != v2.dtype:
+    if a.shape != b.shape:
+        difference = '    DIFFERENT SHAPE (FILE 1: %s, FILE 2: %s)' % \
+                         (a.shape, b.shape)
+        differences.append(indent + difference)
+
+    if a.dtype != b.dtype:
         difference = '    DIFFERENT TYPE (FILE 1: %s, FILE 2: %s)' % \
-                         (v1.dtype, v2.dtype)
+                         (a.dtype, b.dtype)
         differences.append(indent + difference)
 
     if differences:
         return differences
 
-    # compare scalar
-    if len(v1.shape) == 0:
-        a = v1[:]
-        b = v2[:]
+    if not np.issubdtype(a.dtype, np.number):  # TODO other types
+        if not args.no_warnings:
+            warnings.warn('unsupported data type for variable %s, skipping' % \
+                          var_path)
+        return differences
 
-        # handle scalar string variables differently
-        #   these are not read as Numpy data types but as Python str objects
-        # TODO add test for this
-        if isinstance(a, str) and a != b:
-            difference = '    DIFFERENT SCALAR STRING CONTENT (FILE 1: %s, ' \
-                'FILE 2: %s)' % (a, b)
-            differences.append(indent + difference)
-
-        # convert to 1d-array, so we can use indexing below (e.g. aa[both_nan] = 1)
+    # make scalars 1d, so we can use indexing below (e.g. aa[both_nan] = 1)
+    if len(a.shape) == 0:
         if a is ma.masked:
             a = ma.MaskedArray(np.nan)
         if b is ma.masked:
             b = ma.MaskedArray(np.nan)
+
         a = np.atleast_1d(a)
         b = np.atleast_1d(b)
 
-        compare_chunk(a, b, args, indent, differences)
-
-    # compare array
-    else:
-        a = v1[:]  # TODO loop over chunks
-        b = v2[:]
-        compare_chunk(a, b, args, indent, differences)
-
+    compare_chunk(a, b, args, indent, differences, var_path)
     return differences
 
 
-def compare_chunk(a, b, args, indent, differences):
+def compare_chunk(a, b, args, indent, differences, var_path):
+    max_values = args.max_values
+
     # compare nan/inf/-inf
     aa = a.copy()
     bb = b.copy()
 
     # don't compare both masked
+    # TODO would be better to use numpy indexing for this and the following instead
     if isinstance(a, ma.MaskedArray) and isinstance(b, ma.MaskedArray):
         both_masked = (a.mask & b.mask)
         aa[both_masked] = 1
@@ -287,7 +284,6 @@ def compare_chunk(a, b, args, indent, differences):
     violations = violations_array.nonzero()
     violations_array = None
 
-    max_values = args.max_values
     if len(violations[0]):
         difference = '    %d NON-FINITE DIFFERENCE(S)' % \
                          len(violations[0])
