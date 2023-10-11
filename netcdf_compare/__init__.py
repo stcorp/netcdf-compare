@@ -213,9 +213,9 @@ def compare_variable(v1, v2, args, indent, matches):
 
     # handle scalar string variables differently
     #   these are not read as Numpy data types but as Python str objects
-    if a.shape != b.shape:
+    if v1.shape != v2.shape:
         difference = '    DIFFERENT SHAPE (FILE 1: %s, FILE 2: %s)' % \
-                         (a.shape, b.shape)
+                         (v1.shape, v2.shape)
         differences.append(indent + difference)
 
     if a.dtype != b.dtype:
@@ -233,7 +233,7 @@ def compare_variable(v1, v2, args, indent, matches):
         return differences
 
     # scalar
-    if len(a.shape) == 0:
+    if len(v1.shape) == 0:
         if isinstance(a, str):
             if a != b:
                 difference = '    DIFFERENT SCALAR STRING CONTENT (FILE 1: %s, '\
