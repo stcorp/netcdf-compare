@@ -226,7 +226,8 @@ def compare_variable(v1, v2, args, indent, matches):
     if differences:
         return differences
 
-    if not np.issubdtype(a.dtype, np.number):  # TODO other types
+    if (isinstance(v1.datatype, netCDF4._netCDF4.VLType) or  # better check for vlen/ragged array type?
+        not np.issubdtype(v1.datatype, np.number)):
         if not args.no_warnings:
             warnings.warn('unsupported data type for variable %s, skipping' % \
                           var_path)
