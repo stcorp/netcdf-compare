@@ -213,13 +213,6 @@ def compare_variable(v1, v2, args, indent, matches):
 
     # handle scalar string variables differently
     #   these are not read as Numpy data types but as Python str objects
-    if isinstance(a, str):
-        if a != b:
-            difference = '    DIFFERENT SCALAR STRING CONTENT (FILE 1: %s, '\
-                'FILE 2: %s)' % (a, b)
-            differences.append(indent + difference)
-        return differences
-
     if a.shape != b.shape:
         difference = '    DIFFERENT SHAPE (FILE 1: %s, FILE 2: %s)' % \
                          (a.shape, b.shape)
@@ -239,8 +232,16 @@ def compare_variable(v1, v2, args, indent, matches):
                           var_path)
         return differences
 
-    # make scalars 1d, so we can use indexing below (e.g. aa[both_nan] = 1)
+    # scalar
     if len(a.shape) == 0:
+        if isinstance(a, str):
+            if a != b:
+                difference = '    DIFFERENT SCALAR STRING CONTENT (FILE 1: %s, '\
+                    'FILE 2: %s)' % (a, b)
+                differences.append(indent + difference)
+            return differences
+
+        # make scalars 1d, so we can use indexing below (e.g. aa[both_nan] = 1)
         if a is ma.masked:
             a = ma.MaskedArray(np.nan)
         if b is ma.masked:
@@ -248,8 +249,12 @@ def compare_variable(v1, v2, args, indent, matches):
 
         a = np.atleast_1d(a)
         b = np.atleast_1d(b)
+        compare_chunk(a, b, args, indent, differences, var_path)
 
-    compare_chunk(a, b, args, indent, differences, var_path)
+    # array
+    else:
+        compare_chunk(a, b, args, indent, differences, var_path)
+
     return differences
 
 
