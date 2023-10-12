@@ -282,6 +282,7 @@ def compare_variable(v1, v2, args, indent, matches):
             if len(v1.shape) == 1:
                 chunk = (1000000,)
             else:
+                # TODO fine-tune for arbitrary shapes
                 chunk = tuple([1] * (len(v1.shape)-2) + [1000, 1000])  # TODO add test
 
         # compare netcdf chunks (hyperslabs) individually
