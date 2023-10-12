@@ -191,6 +191,15 @@ def compare_attribute(obj1, obj2, path, attr_name, args, indent, matches):
     return differences
 
 
+def show_violations(a, b, idcs, indent, differences):
+    for t in idcs:
+        if not isinstance(a, dict) and len(a.shape) == 0:
+            difference = '      %s: %s, %s' % (t, a, b)
+        else:
+            difference = '      %s: %s, %s' % (t, a[t], b[t])
+        differences.append(indent + difference)
+
+
 def compare_variable(v1, v2, args, indent, matches):
     # compare a single variable
     differences = []
@@ -260,19 +269,44 @@ def compare_variable(v1, v2, args, indent, matches):
             rel_max_violation, rel_max_idcs,
             combined_violations, combined_idcs,
 
-        ) = compare_chunk(a, b, args, indent, differences, var_path)
+        ) = compare_chunk(a, b, args)
 
     # compare array data
     else:
-        a = v1[:]
-        b = v2[:]
-        (
-            nonfin_violations, nonfin_idcs,
-            abs_max_violation, abs_max_idcs,
-            rel_max_violation, rel_max_idcs,
-            combined_violations, combined_idcs,
+        # determine chunk size
+        chunk = v1.chunking()
+        if chunk == 'contiguous':  # TODO determine chunk ourselves
+            chunk = v1.shape
 
-        ) = compare_chunk(a, b, args, indent, differences, var_path)
+        # compare netcdf chunks (hyperslabs) individually
+        # (avoiding insane memory usage for large arrays)
+        nonfin_violations = nonfin_idcs = abs_max_violation = rel_max_violation = \
+            rel_max_idcs = combined_violations = combined_idcs = None
+        all_abs_max_idcs = []
+        a = {}
+        b = {}
+
+        dimpos = [range(0, dim, chunkdim) for dim, chunkdim in zip(v1.shape, chunk)]
+        for pos in itertools.product(*dimpos):
+            hyperslice = [slice(i,i+j) for i, j in zip(pos, chunk)]
+            chunka = v1[hyperslice]
+            chunkb = v2[hyperslice]
+            result = compare_chunk(chunka, chunkb, args)
+
+            # collect results
+            if result[2] is not None:
+                if abs_max_violation is None or result[2] > abs_max_violation:
+                    abs_max_violation = result[2]
+
+                for t in result[3]:
+                    full_pos = tuple(pos[i]+t[i] for i in range(len(pos)))
+                    a[full_pos] = chunka[t]
+                    b[full_pos] = chunkb[t]
+                    all_abs_max_idcs.append((result[2], full_pos))
+
+        # merge results
+        abs_max_idcs = [idx for max_, idx in all_abs_max_idcs if max_ == abs_max_violation]
+        abs_max_idcs = sorted(abs_max_idcs)[:args.max_values]
 
     # summarize differences
     if nonfin_violations is not None:
@@ -302,16 +336,7 @@ def compare_variable(v1, v2, args, indent, matches):
     return differences
 
 
-def show_violations(a, b, idcs, indent, differences):
-    for t in idcs:
-        if len(a.shape) == 0:
-            difference = '      %s: %s, %s' % (t, a, b)
-        else:
-            difference = '      %s: %s, %s' % (t, a[t], b[t])
-        differences.append(indent + difference)
-
-
-def compare_chunk(a, b, args, indent, differences, var_path):
+def compare_chunk(a, b, args):
     max_values = args.max_values
 
     # compare nan/inf/-inf
