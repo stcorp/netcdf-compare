@@ -25,6 +25,9 @@ Variables, groups and attributes can be referenced as follows:
 
 When not referenced by absolute path, there may be multiple matches.
 
+Compound types and vlen/ragged arrays are not supported at the moment.
+
+
 """
 
 
@@ -252,9 +255,10 @@ def compare_variable(v1, v2, args, indent, matches):
         b = np.atleast_1d(b)
 
         (
-             abs_max_violation, abs_max_idcs,
-             rel_max_violation, rel_max_idcs,
-             combined_violations, combined_idcs,
+            nonfin_violations, nonfin_idcs,
+            abs_max_violation, abs_max_idcs,
+            rel_max_violation, rel_max_idcs,
+            combined_violations, combined_idcs,
 
         ) = compare_chunk(a, b, args, indent, differences, var_path)
 
@@ -263,13 +267,21 @@ def compare_variable(v1, v2, args, indent, matches):
         a = v1[:]
         b = v2[:]
         (
-             abs_max_violation, abs_max_idcs,
-             rel_max_violation, rel_max_idcs,
-             combined_violations, combined_idcs,
+            nonfin_violations, nonfin_idcs,
+            abs_max_violation, abs_max_idcs,
+            rel_max_violation, rel_max_idcs,
+            combined_violations, combined_idcs,
 
         ) = compare_chunk(a, b, args, indent, differences, var_path)
 
     # summarize differences
+    if nonfin_violations is not None:
+        difference = '    %d NON-FINITE DIFFERENCE(S)' % nonfin_violations
+        differences.append(indent + difference)
+        difference = '      FIRST %s OCCURRENCE(S):' % len(nonfin_idcs)
+        differences.append(indent + difference)
+        show_violations(a, b, nonfin_idcs, indent, differences)
+
     if abs_max_violation is not None:
         difference = '    MAXIMUM ABSOLUTE VIOLATION: %s' % abs_max_violation
         differences.append(indent + difference)
@@ -283,8 +295,7 @@ def compare_variable(v1, v2, args, indent, matches):
     if combined_violations is not None:
         difference = '    TOTAL NUMBER OF VIOLATIONS: %s' % combined_violations
         differences.append(indent + difference)
-        difference = '      FIRST %s OCCURRENCE(S):' % \
-                            len(combined_idcs)
+        difference = '      FIRST %s OCCURRENCE(S):' % len(combined_idcs)
         differences.append(indent + difference)
         show_violations(a, b, combined_idcs, indent, differences)
 
@@ -332,15 +343,11 @@ def compare_chunk(a, b, args, indent, differences, var_path):
     violations_array = None
 
     if len(violations[0]):
-        difference = '    %d NON-FINITE DIFFERENCE(S)' % \
-                         len(violations[0])
-        differences.append(indent + difference)
-        difference = '      FIRST %s OCCURRENCE(S):' % \
-                            min(max_values, len(violations[0]))
-        differences.append(indent + difference)
-        for t in itertools.islice(sorted(zip(*violations)), 0, max_values):
-            difference = '      %s: %s, %s' % (t, a[t], b[t])
-            differences.append(indent + difference)
+        nonfin_violations = len(violations[0])
+        nonfin_idcs = sorted(zip(*violations))[:max_values]
+    else:
+        nonfin_violations = None
+        nonfin_idcs = None
 
     # compare absolute/relative
     aa = a.copy()
@@ -405,6 +412,7 @@ def compare_chunk(a, b, args, indent, differences, var_path):
         combined_idcs = None
 
     return (
+        nonfin_violations, nonfin_idcs,
         abs_max_violation, abs_max_idcs,
         rel_max_violation, rel_max_idcs,
         combined_violations, combined_idcs,
