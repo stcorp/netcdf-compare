@@ -281,8 +281,10 @@ def compare_variable(v1, v2, args, indent, matches):
         # compare netcdf chunks (hyperslabs) individually
         # (avoiding insane memory usage for large arrays)
         nonfin_violations = nonfin_idcs = abs_max_violation = rel_max_violation = \
-            rel_max_idcs = combined_violations = combined_idcs = None
+            combined_violations = None
         all_abs_max_idcs = []
+        all_rel_max_idcs = []
+        all_combined_idcs = []
         a = {}
         b = {}
 
@@ -304,9 +306,33 @@ def compare_variable(v1, v2, args, indent, matches):
                     b[full_pos] = chunkb[t]
                     all_abs_max_idcs.append((result[2], full_pos))
 
+            if result[4] is not None:
+                if rel_max_violation is None or result[4] > rel_max_violation:
+                    rel_max_violation = result[4]
+
+                for t in result[5]:
+                    full_pos = tuple(pos[i]+t[i] for i in range(len(pos)))
+                    a[full_pos] = chunka[t]
+                    b[full_pos] = chunkb[t]
+                    all_rel_max_idcs.append((result[4], full_pos))
+
+            if result[6] is not None:
+                combined_violations = (combined_violations or 0) + result[6]
+
+                for t in result[7]:
+                    full_pos = tuple(pos[i]+t[i] for i in range(len(pos)))
+                    a[full_pos] = chunka[t]
+                    b[full_pos] = chunkb[t]
+                    all_combined_idcs.append(full_pos)
+
         # merge results
         abs_max_idcs = [idx for max_, idx in all_abs_max_idcs if max_ == abs_max_violation]
         abs_max_idcs = sorted(abs_max_idcs)[:args.max_values]
+
+        rel_max_idcs = [idx for max_, idx in all_rel_max_idcs if max_ == rel_max_violation]
+        rel_max_idcs = sorted(rel_max_idcs)[:args.max_values]
+
+        combined_idcs = sorted(all_combined_idcs)[:args.max_values]
 
     # summarize differences
     if nonfin_violations is not None:
