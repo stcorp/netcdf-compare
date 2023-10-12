@@ -251,15 +251,36 @@ def compare_variable(v1, v2, args, indent, matches):
         a = np.atleast_1d(a)
         b = np.atleast_1d(b)
 
-        compare_chunk(a, b, args, indent, differences, var_path)
+        (
+             abs_max_violation,
+             abs_max_idcs,
+        ) = compare_chunk(a, b, args, indent, differences, var_path)
 
     # compare array data
     else:
         a = v1[:]
         b = v2[:]
-        compare_chunk(a, b, args, indent, differences, var_path)
+        (
+             abs_max_violation,
+             abs_max_idcs,
+        ) = compare_chunk(a, b, args, indent, differences, var_path)
+
+    # summarize differences
+    if abs_max_violation is not None:
+        difference = '    MAXIMUM ABSOLUTE VIOLATION: %s' % abs_max_violation
+        differences.append(indent + difference)
+        show_violations(a, b, abs_max_idcs, indent, differences)
 
     return differences
+
+
+def show_violations(a, b, idcs, indent, differences):
+    for t in idcs:
+        if len(a.shape) == 0:
+            difference = '      %s: %s, %s' % (t, a, b)
+        else:
+            difference = '      %s: %s, %s' % (t, a[t], b[t])
+        differences.append(indent + difference)
 
 
 def compare_chunk(a, b, args, indent, differences, var_path):
@@ -327,17 +348,12 @@ def compare_chunk(a, b, args, indent, differences, var_path):
     aviolations = (absaminb > args.atol).nonzero()
 
     if len(aviolations[0]):
-        amax = np.amax(absaminb)
-        difference = '    MAXIMUM ABSOLUTE VIOLATION: %s' % amax
-        differences.append(indent + difference)
-
-        maxidcs = (absaminb == amax).nonzero()
-        for t in itertools.islice(sorted(zip(*maxidcs)), 0, max_values):
-            if len(aa.shape) == 0:
-                difference = '      %s: %s, %s' % (t, a, b)
-            else:
-                difference = '      %s: %s, %s' % (t, a[t], b[t])
-            differences.append(indent + difference)
+        abs_max_violation = np.amax(absaminb)
+        abs_max_idcs = (absaminb == abs_max_violation).nonzero()
+        abs_max_idcs = sorted(zip(*abs_max_idcs))[:max_values]
+    else:
+        abs_max_violation = None
+        abs_max_idcs = None
 
     # compare using relative tolerance
     reldiff = absaminb / np.minimum(np.abs(aa), np.abs(bb))
@@ -360,7 +376,6 @@ def compare_chunk(a, b, args, indent, differences, var_path):
     reldiff = None
 
     # logically combine absolute/relative checks
-
     if args.combined_tolerance:
         violations = set(zip(*aviolations)) & set(zip(*rviolations))
     else:
@@ -381,7 +396,9 @@ def compare_chunk(a, b, args, indent, differences, var_path):
                 difference = '      %s: %s, %s' % (t, a[t], b[t])
             differences.append(indent + difference)
 
-    return differences
+    return (
+        abs_max_violation, abs_max_idcs,
+    )
 
 
 def compare_attributes(obj1, obj2, path, args, indent, matches):
