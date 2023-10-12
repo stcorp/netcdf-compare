@@ -300,42 +300,48 @@ def compare_variable(v1, v2, args, indent, matches):
             hyperslice = [slice(i,i+j) for i, j in zip(pos, chunk)]
             chunka = v1[hyperslice]
             chunkb = v2[hyperslice]
-            result = compare_chunk(chunka, chunkb, args)
+
+            (
+                nonfin_violations_, nonfin_idcs_,
+                abs_max_violation_, abs_max_idcs_,
+                rel_max_violation_, rel_max_idcs_,
+                combined_violations_, combined_idcs_,
+            ) = compare_chunk(chunka, chunkb, args)
 
             # collect results
-            if result[0] is not None:
-                nonfin_violations = (nonfin_violations or 0) + result[0]
+            if nonfin_violations_ is not None:
+                nonfin_violations = (nonfin_violations or 0) + nonfin_violations_
 
-                for t in result[1]:
+                for t in nonfin_idcs_:
                     full_pos = tuple(pos[i]+t[i] for i in range(len(pos)))
                     a[full_pos] = chunka[t]
                     b[full_pos] = chunkb[t]
                     all_nonfin_idcs.append(full_pos)
 
-            if result[2] is not None:
-                if abs_max_violation is None or result[2] > abs_max_violation:
-                    abs_max_violation = result[2]
+            if abs_max_violation_ is not None:
+                if abs_max_violation is None or abs_max_violation_ > abs_max_violation:
+                    abs_max_violation = abs_max_violation_
 
-                for t in result[3]:
+                for t in abs_max_idcs_:
                     full_pos = tuple(pos[i]+t[i] for i in range(len(pos)))
                     a[full_pos] = chunka[t]
                     b[full_pos] = chunkb[t]
-                    all_abs_max_idcs.append((result[2], full_pos))
+                    all_abs_max_idcs.append((abs_max_violation_, full_pos))
 
-            if result[4] is not None:
-                if rel_max_violation is None or result[4] > rel_max_violation:
-                    rel_max_violation = result[4]
+            if rel_max_violation_ is not None:
+                if rel_max_violation is None or rel_max_violation_ > rel_max_violation:
+                    rel_max_violation = rel_max_violation_
 
-                for t in result[5]:
+                for t in rel_max_idcs_:
                     full_pos = tuple(pos[i]+t[i] for i in range(len(pos)))
                     a[full_pos] = chunka[t]
                     b[full_pos] = chunkb[t]
-                    all_rel_max_idcs.append((result[4], full_pos))
+                    all_rel_max_idcs.append((rel_max_violation_, full_pos))
 
-            if result[6] is not None:
-                combined_violations = (combined_violations or 0) + result[6]
+            if combined_violations_ is not None:
+                combined_violations = (combined_violations or 0) + combined_violations_
 
-                for t in result[7]:
+                for t in combined_idcs_:
                     full_pos = tuple(pos[i]+t[i] for i in range(len(pos)))
                     a[full_pos] = chunka[t]
                     b[full_pos] = chunkb[t]
