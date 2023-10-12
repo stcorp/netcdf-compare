@@ -64,6 +64,8 @@ Then verify your installation with:
 
     When not referenced by absolute path, there may be multiple matches.
 
+    Compound types and vlen/ragged arrays are not supported at the moment,
+
 ## Output example
 
 Comparing [FCI](https://www.eumetsat.int/mtg-flexible-combined-imager-fci) data to a reference file may give the following output:
