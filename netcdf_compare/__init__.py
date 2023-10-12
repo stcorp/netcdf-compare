@@ -25,10 +25,13 @@ Variables, groups and attributes can be referenced as follows:
 
 When not referenced by absolute path, there may be multiple matches.
 
-Compound types and vlen/ragged arrays are not supported at the moment.
+Compound types and vlen/ragged arrays are not supported at the moment,
+and will cause various warnings.
 
 
 """
+
+# TODO test coverage
 
 
 def parse_args():
@@ -275,8 +278,11 @@ def compare_variable(v1, v2, args, indent, matches):
     else:
         # determine chunk size
         chunk = v1.chunking()
-        if chunk == 'contiguous':  # TODO determine chunk ourselves
-            chunk = v1.shape
+        if chunk == 'contiguous':
+            if len(v1.shape) == 1:
+                chunk = (1000000,)
+            else:
+                chunk = tuple([1] * (len(v1.shape)-2) + [1000, 1000])  # TODO add test
 
         # compare netcdf chunks (hyperslabs) individually
         # (avoiding insane memory usage for large arrays)
