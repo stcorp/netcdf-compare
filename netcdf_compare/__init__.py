@@ -280,11 +280,12 @@ def compare_variable(v1, v2, args, indent, matches):
 
         # compare netcdf chunks (hyperslabs) individually
         # (avoiding insane memory usage for large arrays)
-        nonfin_violations = nonfin_idcs = abs_max_violation = rel_max_violation = \
-            combined_violations = None
+        nonfin_violations = abs_max_violation = rel_max_violation = combined_violations = None
         all_abs_max_idcs = []
         all_rel_max_idcs = []
         all_combined_idcs = []
+        all_nonfin_idcs = []
+
         a = {}
         b = {}
 
@@ -296,6 +297,15 @@ def compare_variable(v1, v2, args, indent, matches):
             result = compare_chunk(chunka, chunkb, args)
 
             # collect results
+            if result[0] is not None:
+                nonfin_violations = (nonfin_violations or 0) + result[0]
+
+                for t in result[1]:
+                    full_pos = tuple(pos[i]+t[i] for i in range(len(pos)))
+                    a[full_pos] = chunka[t]
+                    b[full_pos] = chunkb[t]
+                    all_nonfin_idcs.append(full_pos)
+
             if result[2] is not None:
                 if abs_max_violation is None or result[2] > abs_max_violation:
                     abs_max_violation = result[2]
@@ -333,6 +343,8 @@ def compare_variable(v1, v2, args, indent, matches):
         rel_max_idcs = sorted(rel_max_idcs)[:args.max_values]
 
         combined_idcs = sorted(all_combined_idcs)[:args.max_values]
+
+        nonfin_idcs = sorted(all_nonfin_idcs)[:args.max_values]
 
     # summarize differences
     if nonfin_violations is not None:
