@@ -254,6 +254,7 @@ def compare_variable(v1, v2, args, indent, matches):
         (
              abs_max_violation, abs_max_idcs,
              rel_max_violation, rel_max_idcs,
+             combined_violations, combined_idcs,
 
         ) = compare_chunk(a, b, args, indent, differences, var_path)
 
@@ -264,6 +265,7 @@ def compare_variable(v1, v2, args, indent, matches):
         (
              abs_max_violation, abs_max_idcs,
              rel_max_violation, rel_max_idcs,
+             combined_violations, combined_idcs,
 
         ) = compare_chunk(a, b, args, indent, differences, var_path)
 
@@ -278,6 +280,13 @@ def compare_variable(v1, v2, args, indent, matches):
         differences.append(indent + difference)
         show_violations(a, b, rel_max_idcs, indent, differences)
 
+    if combined_violations is not None:
+        difference = '    TOTAL NUMBER OF VIOLATIONS: %s' % combined_violations
+        differences.append(indent + difference)
+        difference = '      FIRST %s OCCURRENCE(S):' % \
+                            len(combined_idcs)
+        differences.append(indent + difference)
+        show_violations(a, b, combined_idcs, indent, differences)
 
     return differences
 
@@ -388,22 +397,17 @@ def compare_chunk(a, b, args, indent, differences, var_path):
     violations = sorted(violations)
 
     if violations:
-        difference = '    TOTAL NUMBER OF VIOLATIONS: %s' % \
-                         len(violations)
-        differences.append(indent + difference)
-        difference = '      FIRST %s OCCURRENCE(S):' % \
-                            min(max_values, len(violations))
-        differences.append(indent + difference)
-        for t in itertools.islice(violations, 0, max_values):
-            if len(aa.shape) == 0:
-                difference = '      %s: %s, %s' % (t, a, b)
-            else:
-                difference = '      %s: %s, %s' % (t, a[t], b[t])
-            differences.append(indent + difference)
+        combined_violations = len(violations)
+        combined_idcs = violations[:max_values]
+
+    else:
+        combined_violations = None
+        combined_idcs = None
 
     return (
         abs_max_violation, abs_max_idcs,
         rel_max_violation, rel_max_idcs,
+        combined_violations, combined_idcs,
     )
 
 
