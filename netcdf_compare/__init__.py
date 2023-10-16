@@ -228,12 +228,21 @@ def compare_variable(v1, v2, args, indent, matches):
                          (v1.shape, v2.shape)
         differences.append(indent + difference)
 
-    if v1.dtype != v2.dtype:
+    if v1.dtype != v2.dtype:  # TODO compare .datatype?
         difference = '    DIFFERENT TYPE (FILE 1: %s, FILE 2: %s)' % \
                          (v1.dtype, v2.dtype)
         differences.append(indent + difference)
 
     if differences:
+        return differences
+
+    if isinstance(v1.datatype, netCDF4._netCDF4.CompoundType):
+        for field in v1.datatype.dtype.names:
+            field_diffs = []
+            compare_array(v1, v2, args, field_diffs, indent, field=field)
+            if field_diffs:
+                differences.append(indent + '    FIELD ' + field)
+            differences.extend(['  '+d for d in field_diffs])
         return differences
 
     if (isinstance(v1.datatype, netCDF4._netCDF4.VLType) or  # better check for vlen/ragged array type?
@@ -246,7 +255,7 @@ def compare_variable(v1, v2, args, indent, matches):
     return compare_array(v1, v2, args, differences, indent)
 
 
-def compare_array(v1, v2, args, differences, indent):
+def compare_array(v1, v2, args, differences, indent, field=None):
     # compare scalar data
     if len(v1.shape) == 0:
         a = v1[:]
@@ -304,6 +313,10 @@ def compare_array(v1, v2, args, differences, indent):
             hyperslice = [slice(i,i+j) for i, j in zip(pos, chunk)]
             chunka = v1[hyperslice]
             chunkb = v2[hyperslice]
+
+            if field is not None:  # TODO don't load all fields
+                chunka = chunka[field]
+                chunkb = chunkb[field]
 
             (
                 nonfin_violations_, nonfin_idcs_,
