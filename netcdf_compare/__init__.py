@@ -253,6 +253,8 @@ def compare_variable(v1, v2, args, indent, matches):
 
 
 def compare_array(v1, v2, args, differences, indent, field=None):
+    max_values = args.max_values
+
     vlen_violations = None
 
     # compare scalar data
@@ -337,7 +339,7 @@ def compare_array(v1, v2, args, differences, indent, field=None):
                         chunkb_arr = np.asarray(chunkb[t])
                         inequal_idcs = (~np.isclose(chunka_arr, chunkb_arr, args.rtol, args.atol)).nonzero()
                         if len(inequal_idcs[0]) > 0:
-                            for u in sorted(zip(*inequal_idcs)):
+                            for u in sorted(zip(*inequal_idcs))[:max_values]:
                                 full_pos2 = full_pos + u
                                 a[full_pos2] = chunka_arr[u]
                                 b[full_pos2] = chunkb_arr[u]
@@ -395,14 +397,14 @@ def compare_array(v1, v2, args, differences, indent, field=None):
 
         # merge results
         abs_max_idcs = [idx for max_, idx in all_abs_max_idcs if max_ == abs_max_violation]
-        abs_max_idcs = sorted(abs_max_idcs)[:args.max_values]
+        abs_max_idcs = sorted(abs_max_idcs)[:max_values]
 
         rel_max_idcs = [idx for max_, idx in all_rel_max_idcs if max_ == rel_max_violation]
-        rel_max_idcs = sorted(rel_max_idcs)[:args.max_values]
+        rel_max_idcs = sorted(rel_max_idcs)[:max_values]
 
-        combined_idcs = sorted(all_combined_idcs)[:args.max_values]
+        combined_idcs = sorted(all_combined_idcs)[:max_values]
 
-        nonfin_idcs = sorted(all_nonfin_idcs)[:args.max_values]
+        nonfin_idcs = sorted(all_nonfin_idcs)[:max_values]
 
     # summarize differences
     if vlen_violations is not None:
