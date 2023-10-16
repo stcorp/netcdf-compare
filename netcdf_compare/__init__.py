@@ -193,12 +193,15 @@ def compare_attribute(obj1, obj2, path, attr_name, args, indent, matches):
     return differences
 
 
-def show_violations(a, b, idcs, indent, differences):
+def show_violations(v1, a, b, idcs, indent, differences):
     for t in idcs:
         if not isinstance(a, dict) and len(a.shape) == 0:
             difference = '      %s: %s, %s' % (t, a, b)
         else:
-            difference = '      %s: %s, %s' % (t, a[t], b[t])
+            if v1.dtype is str:
+                difference = '      %s: "%s", "%s"' % (t, a[t], b[t])
+            else:
+                difference = '      %s: %s, %s' % (t, a[t], b[t])
         differences.append(indent + difference)
 
 
@@ -248,9 +251,9 @@ def compare_variable(v1, v2, args, indent, matches):
             differences.extend(['  '+d for d in field_diffs])
 
     elif isinstance(v1.datatype, netCDF4._netCDF4.VLType):  # better check for vlen/ragged array type?
-#        if v1.dtype is str:
-#            return compare_array(v1, v2, args, differences, indent)
-#        else:
+        if v1.dtype is str:
+            return compare_array(v1, v2, args, differences, indent)
+        else:
             unsupported = True
 
     elif np.issubdtype(v1.datatype, np.number):
@@ -324,10 +327,24 @@ def compare_array(v1, v2, args, differences, indent, field=None):
             chunka = v1[hyperslice]
             chunkb = v2[hyperslice]
 
+            # get compound field
             if field is not None:  # TODO don't load all fields
                 chunka = chunka[field]
                 chunkb = chunkb[field]
 
+            # dtype object
+            if chunka.dtype == object:
+                idcs = (chunka != chunkb).nonzero()
+                nonfin_violations = (nonfin_violations or 0) + len(idcs[0])
+
+                for t in sorted(zip(*idcs))[:args.max_values]:
+                    full_pos = tuple(pos[i]+t[i] for i in range(len(pos)))
+                    a[full_pos] = chunka[t]
+                    b[full_pos] = chunkb[t]
+                    all_nonfin_idcs.append(full_pos)
+                continue
+
+            # scalar array
             (
                 nonfin_violations_, nonfin_idcs_,
                 abs_max_violation_, abs_max_idcs_,
@@ -391,24 +408,24 @@ def compare_array(v1, v2, args, differences, indent, field=None):
         differences.append(indent + difference)
         difference = '      FIRST %s OCCURRENCE(S):' % len(nonfin_idcs)
         differences.append(indent + difference)
-        show_violations(a, b, nonfin_idcs, indent, differences)
+        show_violations(v1, a, b, nonfin_idcs, indent, differences)
 
     if abs_max_violation is not None:
         difference = '    MAXIMUM ABSOLUTE VIOLATION: %s' % abs_max_violation
         differences.append(indent + difference)
-        show_violations(a, b, abs_max_idcs, indent, differences)
+        show_violations(v1, a, b, abs_max_idcs, indent, differences)
 
     if rel_max_violation is not None:
         difference = '    MAXIMUM RELATIVE VIOLATION: %s' % rel_max_violation
         differences.append(indent + difference)
-        show_violations(a, b, rel_max_idcs, indent, differences)
+        show_violations(v1, a, b, rel_max_idcs, indent, differences)
 
     if combined_violations is not None:
         difference = '    TOTAL NUMBER OF VIOLATIONS: %s' % combined_violations
         differences.append(indent + difference)
         difference = '      FIRST %s OCCURRENCE(S):' % len(combined_idcs)
         differences.append(indent + difference)
-        show_violations(a, b, combined_idcs, indent, differences)
+        show_violations(v1, a, b, combined_idcs, indent, differences)
 
     return differences
 
