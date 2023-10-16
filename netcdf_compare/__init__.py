@@ -239,9 +239,6 @@ def compare_variable(v1, v2, args, indent, matches):
     if differences:
         return differences
 
-    # compare for different datatypes
-    unsupported = False
-
     if isinstance(v1.datatype, netCDF4._netCDF4.CompoundType):
         for field in v1.datatype.dtype.names:
             field_diffs = []
@@ -249,26 +246,15 @@ def compare_variable(v1, v2, args, indent, matches):
             if field_diffs:
                 differences.append(indent + '    FIELD ' + field)
             differences.extend(['  '+d for d in field_diffs])
-
-    elif isinstance(v1.datatype, netCDF4._netCDF4.VLType):  # better check for vlen/ragged array type?
-        if v1.dtype is str:
-            return compare_array(v1, v2, args, differences, indent)
-        else:
-            unsupported = True
-
-    elif np.issubdtype(v1.datatype, np.number):
-        compare_array(v1, v2, args, differences, indent)
-
     else:
-       unsupported = True
-
-    if unsupported and not args.no_warnings:
-        warnings.warn('unsupported data type for variable %s, skipping' % var_path)
+        compare_array(v1, v2, args, differences, indent)
 
     return differences
 
 
 def compare_array(v1, v2, args, differences, indent, field=None):
+    vlen_violations = None
+
     # compare scalar data
     if len(v1.shape) == 0:
         a = v1[:]
@@ -303,6 +289,7 @@ def compare_array(v1, v2, args, differences, indent, field=None):
     else:
         # determine chunk size
         chunk = v1.chunking()
+
         if chunk == 'contiguous':
             if len(v1.shape) == 1:
                 chunk = (1000000,)
@@ -317,6 +304,7 @@ def compare_array(v1, v2, args, differences, indent, field=None):
         all_rel_max_idcs = []
         all_combined_idcs = []
         all_nonfin_idcs = []
+        vlen_idcs = []
 
         a = {}
         b = {}
@@ -334,14 +322,26 @@ def compare_array(v1, v2, args, differences, indent, field=None):
 
             # dtype object
             if chunka.dtype == object:
-                idcs = (chunka != chunkb).nonzero()
-                nonfin_violations = (nonfin_violations or 0) + len(idcs[0])
+                idcs = []
+                for t in zip(*[idcs.flat for idcs in np.indices(chunka.shape)]):  # TODO slow for now: per-vlen-object
+                    if v1.dtype is str:
+                        equal = chunka[t] == chunkb[t]
+                    else:
+                        equal = np.allclose(np.asarray(chunka[t]), np.asarray(chunkb[t]),
+                                            args.rtol, args.atol)  # TODO compare in detail!
+                    if not equal:
+                        vlen_violations = (vlen_violations or 0) + 1
 
-                for t in sorted(zip(*idcs))[:args.max_values]:
-                    full_pos = tuple(pos[i]+t[i] for i in range(len(pos)))
-                    a[full_pos] = chunka[t]
-                    b[full_pos] = chunkb[t]
-                    all_nonfin_idcs.append(full_pos)
+                        full_pos = tuple(pos[i]+t[i] for i in range(len(pos)))
+                        if v1.dtype is str:
+                            a[full_pos] = chunka[t]
+                            b[full_pos] = chunkb[t]
+                        else:
+                            a[full_pos] = '?'
+                            b[full_pos] = '?'
+
+                        vlen_idcs.append(full_pos)
+
                 continue
 
             # scalar array
@@ -403,6 +403,11 @@ def compare_array(v1, v2, args, differences, indent, field=None):
         nonfin_idcs = sorted(all_nonfin_idcs)[:args.max_values]
 
     # summarize differences
+    if vlen_violations is not None:
+        difference = '    %d OBJECT DIFFERENCE(S):' % vlen_violations
+        differences.append(indent + difference)
+        show_violations(v1, a, b, vlen_idcs, indent, differences)
+
     if nonfin_violations is not None:
         difference = '    %d NON-FINITE DIFFERENCE(S)' % nonfin_violations
         differences.append(indent + difference)
