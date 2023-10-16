@@ -236,6 +236,9 @@ def compare_variable(v1, v2, args, indent, matches):
     if differences:
         return differences
 
+    # compare for different datatypes
+    unsupported = False
+
     if isinstance(v1.datatype, netCDF4._netCDF4.CompoundType):
         for field in v1.datatype.dtype.names:
             field_diffs = []
@@ -243,16 +246,23 @@ def compare_variable(v1, v2, args, indent, matches):
             if field_diffs:
                 differences.append(indent + '    FIELD ' + field)
             differences.extend(['  '+d for d in field_diffs])
-        return differences
 
-    if (isinstance(v1.datatype, netCDF4._netCDF4.VLType) or  # better check for vlen/ragged array type?
-        not np.issubdtype(v1.datatype, np.number)):
-        if not args.no_warnings:
-            warnings.warn('unsupported data type for variable %s, skipping' % \
-                          var_path)
-        return differences
+    elif isinstance(v1.datatype, netCDF4._netCDF4.VLType):  # better check for vlen/ragged array type?
+#        if v1.dtype is str:
+#            return compare_array(v1, v2, args, differences, indent)
+#        else:
+            unsupported = True
 
-    return compare_array(v1, v2, args, differences, indent)
+    elif np.issubdtype(v1.datatype, np.number):
+        compare_array(v1, v2, args, differences, indent)
+
+    else:
+       unsupported = True
+
+    if unsupported and not args.no_warnings:
+        warnings.warn('unsupported data type for variable %s, skipping' % var_path)
+
+    return differences
 
 
 def compare_array(v1, v2, args, differences, indent, field=None):
