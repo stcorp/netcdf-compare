@@ -315,36 +315,38 @@ def compare_array(v1, v2, args, differences, indent, field=None):
             chunka = v1[hyperslice]
             chunkb = v2[hyperslice]
 
-            # get compound field
+            # compound array: get specified field
             if field is not None:  # TODO don't load all fields
                 chunka = chunka[field]
                 chunkb = chunkb[field]
 
-            # dtype object
+            # vlen (str/object) array
             if chunka.dtype == object:
                 idcs = []
                 for t in zip(*[idcs.flat for idcs in np.indices(chunka.shape)]):  # TODO slow for now: per-vlen-object
-                    if v1.dtype is str:
-                        equal = chunka[t] == chunkb[t]
-                    else:
-                        equal = np.allclose(np.asarray(chunka[t]), np.asarray(chunkb[t]),
-                                            args.rtol, args.atol)  # TODO compare in detail!
-                    if not equal:
-                        vlen_violations = (vlen_violations or 0) + 1
+                    full_pos = tuple(pos[i]+t[i] for i in range(len(pos)))
 
-                        full_pos = tuple(pos[i]+t[i] for i in range(len(pos)))
-                        if v1.dtype is str:
+                    if v1.dtype is str:
+                        if chunka[t] != chunkb[t]:
+                            vlen_violations = (vlen_violations or 0) + 1
                             a[full_pos] = chunka[t]
                             b[full_pos] = chunkb[t]
-                        else:
-                            a[full_pos] = '?'
-                            b[full_pos] = '?'
-
-                        vlen_idcs.append(full_pos)
+                            vlen_idcs.append(full_pos)
+                    else:
+                        chunka_arr = np.asarray(chunka[t])
+                        chunkb_arr = np.asarray(chunkb[t])
+                        inequal_idcs = (~np.isclose(chunka_arr, chunkb_arr, args.rtol, args.atol)).nonzero()
+                        if len(inequal_idcs[0]) > 0:
+                            for u in sorted(zip(*inequal_idcs)):
+                                full_pos2 = full_pos + u
+                                a[full_pos2] = chunka_arr[u]
+                                b[full_pos2] = chunkb_arr[u]
+                                vlen_violations = (vlen_violations or 0) + 1
+                                vlen_idcs.append(full_pos2)
 
                 continue
 
-            # scalar array
+            # regular scalar array
             (
                 nonfin_violations_, nonfin_idcs_,
                 abs_max_violation_, abs_max_idcs_,
