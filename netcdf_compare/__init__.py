@@ -243,6 +243,10 @@ def compare_variable(v1, v2, args, indent, matches):
                           var_path)
         return differences
 
+    return compare_array(v1, v2, args, differences, indent)
+
+
+def compare_array(v1, v2, args, differences, indent):
     # compare scalar data
     if len(v1.shape) == 0:
         a = v1[:]
