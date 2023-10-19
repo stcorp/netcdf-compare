@@ -306,8 +306,7 @@ def compare_array(pool, v1, v2, args, differences, indent, var_path, field=None)
 
         # compare netcdf chunks (hyperslabs) individually
         # (avoiding insane memory usage for large arrays)
-        nonfin_violations = abs_max_violation = rel_max_violation = combined_violations = None
-        vlen_violations = None
+        nonfin_violations = abs_max_violation = rel_max_violation = combined_violations = vlen_violations = None
         all_abs_max_idcs = []
         all_rel_max_idcs = []
         all_combined_idcs = []
@@ -317,11 +316,12 @@ def compare_array(pool, v1, v2, args, differences, indent, var_path, field=None)
         dimpos = [range(0, dim, chunkdim) for dim, chunkdim in zip(v1.shape, chunk)]
         hyperslices = []
         for pos in itertools.product(*dimpos):
-            hyperslices.append([slice(i,i+j) for i, j in zip(pos, chunk)])
+            hyperslices.append((pos, [slice(i,i+j) for i, j in zip(pos, chunk)]))
 
-        args = [(hyperslice, args.file1, args.file2, var_path, field, atol, rtol, max_values, combined_tolerance) for hyperslice in hyperslices]
+        args = [(pos, hyperslice, args.file1, args.file2, var_path, field, atol, rtol, max_values, combined_tolerance) for (pos, hyperslice) in hyperslices]
 
         for (
+                pos,
                 vlen_violations_, vlen_idcs_,
                 nonfin_violations_, nonfin_idcs_,
                 abs_max_violation_, abs_max_idcs_,
@@ -416,7 +416,7 @@ open_file2 = None
 
 def compare_chunk(args):
     global open_file1, open_file2
-    (hyperslice, file1, file2, var_path, field, atol, rtol, max_values, combined_tolerance) = args
+    (pos, hyperslice, file1, file2, var_path, field, atol, rtol, max_values, combined_tolerance) = args
 
     vlen_violations_ = nonfin_violations_ = abs_max_violations_ = rel_max_violations_ = combined_violations_ = None
     vlen_idcs_ = []
@@ -475,6 +475,7 @@ def compare_chunk(args):
         ) = compare_data(chunka, chunkb, atol, rtol, max_values, combined_tolerance)
 
     return (
+        pos,
         vlen_violations_, vlen_idcs_,
         nonfin_violations_, nonfin_idcs_,
         abs_max_violations_, abs_max_idcs_,
