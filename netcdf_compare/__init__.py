@@ -385,11 +385,9 @@ def compare_array(v1, v2, args, differences, indent, field=None):
                 if abs_max_violation is None or abs_max_violation_ > abs_max_violation:
                     abs_max_violation = abs_max_violation_
 
-                for t in abs_max_idcs_:
+                for t, aval, bval in abs_max_idcs_:
                     full_pos = tuple(pos[i]+t[i] for i in range(len(pos)))
-                    a[full_pos] = chunka[t]
-                    b[full_pos] = chunkb[t]
-                    all_abs_max_idcs.append((abs_max_violation_, full_pos))
+                    all_abs_max_idcs.append((abs_max_violation_, full_pos, aval, bval))
 
             if rel_max_violation_ is not None:
                 if rel_max_violation is None or rel_max_violation_ > rel_max_violation:
@@ -411,7 +409,7 @@ def compare_array(v1, v2, args, differences, indent, field=None):
                     all_combined_idcs.append(full_pos)
 
         # merge results
-        abs_max_idcs = [idx for max_, idx in all_abs_max_idcs if max_ == abs_max_violation]
+        abs_max_idcs = [(idx, aval, bval) for (max_, idx, aval, bval) in all_abs_max_idcs if max_ == abs_max_violation]
         abs_max_idcs = sorted(abs_max_idcs)[:max_values]
 
         rel_max_idcs = [idx for max_, idx in all_rel_max_idcs if max_ == rel_max_violation]
@@ -520,6 +518,7 @@ def compare_chunk(a, b, args):
         abs_max_violation = np.amax(absaminb)
         abs_max_idcs = (absaminb == abs_max_violation).nonzero()
         abs_max_idcs = sorted(zip(*abs_max_idcs))[:max_values]
+        abs_max_idcs = [(t, a[t], b[t]) for t in abs_max_idcs]
     else:
         abs_max_violation = None
         abs_max_idcs = None
