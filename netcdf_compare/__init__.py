@@ -193,21 +193,12 @@ def compare_attribute(obj1, obj2, path, attr_name, args, indent, matches):
     return differences
 
 
-def show_violations(v1, a, b, idcs, indent, differences):
-    for t in idcs:
-        if isinstance(t[0], tuple):
-            t, aval, bval = t
+def show_violations(v1, idcs, indent, differences):
+    for t, aval, bval in idcs:
+        if v1.dtype is str:
+            difference = '      %s: "%s", "%s"' % (t, aval, bval)
         else:
-            aval = a[t]
-            bval = b[t]
-
-        if not isinstance(a, dict) and len(a.shape) == 0:
-            difference = '      %s: %s, %s' % (t, a, b)
-        else:
-            if v1.dtype is str:
-                difference = '      %s: "%s", "%s"' % (t, aval, bval)
-            else:
-                difference = '      %s: %s, %s' % (t, aval, bval)
+            difference = '      %s: %s, %s' % (t, aval, bval)
         differences.append(indent + difference)
 
 
@@ -315,9 +306,6 @@ def compare_array(v1, v2, args, differences, indent, field=None):
         all_nonfin_idcs = []
         all_vlen_idcs = []
 
-        a = {}
-        b = {}
-
         dimpos = [range(0, dim, chunkdim) for dim, chunkdim in zip(v1.shape, chunk)]
         for pos in itertools.product(*dimpos):
             hyperslice = [slice(i,i+j) for i, j in zip(pos, chunk)]
@@ -341,8 +329,6 @@ def compare_array(v1, v2, args, differences, indent, field=None):
                     if v1.dtype is str:
                         if chunka[t] != chunkb[t]:
                             vlen_violations_ = (vlen_violations_ or 0) + 1
-                            a[full_pos] = chunka[t]
-                            b[full_pos] = chunkb[t]
                             vlen_idcs_.append((full_pos, chunka[t], chunkb[t]))
                     else:
                         chunka_arr = np.asarray(chunka[t])
@@ -351,8 +337,6 @@ def compare_array(v1, v2, args, differences, indent, field=None):
                         if len(inequal_idcs[0]) > 0:
                             for u in sorted(zip(*inequal_idcs))[:max_values]:
                                 full_pos2 = full_pos + u
-                                a[full_pos2] = chunka_arr[u]
-                                b[full_pos2] = chunkb_arr[u]
                                 vlen_violations_ = (vlen_violations_ or 0) + 1
                                 vlen_idcs_.append((full_pos2, chunka_arr[u], chunkb_arr[u]))
 
@@ -375,11 +359,9 @@ def compare_array(v1, v2, args, differences, indent, field=None):
             if nonfin_violations_ is not None:
                 nonfin_violations = (nonfin_violations or 0) + nonfin_violations_
 
-                for t in nonfin_idcs_:
+                for t, aval, bval in nonfin_idcs_:
                     full_pos = tuple(pos[i]+t[i] for i in range(len(pos)))
-                    a[full_pos] = chunka[t]
-                    b[full_pos] = chunkb[t]
-                    all_nonfin_idcs.append(full_pos)
+                    all_nonfin_idcs.append((full_pos, aval, bval))
 
             if abs_max_violation_ is not None:
                 if abs_max_violation is None or abs_max_violation_ > abs_max_violation:
@@ -393,26 +375,22 @@ def compare_array(v1, v2, args, differences, indent, field=None):
                 if rel_max_violation is None or rel_max_violation_ > rel_max_violation:
                     rel_max_violation = rel_max_violation_
 
-                for t in rel_max_idcs_:
+                for t, aval, bval in rel_max_idcs_:
                     full_pos = tuple(pos[i]+t[i] for i in range(len(pos)))
-                    a[full_pos] = chunka[t]
-                    b[full_pos] = chunkb[t]
-                    all_rel_max_idcs.append((rel_max_violation_, full_pos))
+                    all_rel_max_idcs.append((rel_max_violation_, full_pos, aval, bval))
 
             if combined_violations_ is not None:
                 combined_violations = (combined_violations or 0) + combined_violations_
 
-                for t in combined_idcs_:
+                for t, aval, bval in combined_idcs_:
                     full_pos = tuple(pos[i]+t[i] for i in range(len(pos)))
-                    a[full_pos] = chunka[t]
-                    b[full_pos] = chunkb[t]
-                    all_combined_idcs.append(full_pos)
+                    all_combined_idcs.append((full_pos, aval, bval))
 
         # merge results
         abs_max_idcs = [(idx, aval, bval) for (max_, idx, aval, bval) in all_abs_max_idcs if max_ == abs_max_violation]
         abs_max_idcs = sorted(abs_max_idcs)[:max_values]
 
-        rel_max_idcs = [idx for max_, idx in all_rel_max_idcs if max_ == rel_max_violation]
+        rel_max_idcs = [(idx, aval, bval) for (max_, idx, aval, bval) in all_rel_max_idcs if max_ == rel_max_violation]
         rel_max_idcs = sorted(rel_max_idcs)[:max_values]
 
         combined_idcs = sorted(all_combined_idcs)[:max_values]
@@ -423,31 +401,31 @@ def compare_array(v1, v2, args, differences, indent, field=None):
     if vlen_violations is not None:
         difference = '    %d OBJECT DIFFERENCE(S):' % vlen_violations
         differences.append(indent + difference)
-        show_violations(v1, a, b, all_vlen_idcs, indent, differences)
+        show_violations(v1, all_vlen_idcs, indent, differences)
 
     if nonfin_violations is not None:
         difference = '    %d NON-FINITE DIFFERENCE(S)' % nonfin_violations
         differences.append(indent + difference)
         difference = '      FIRST %s OCCURRENCE(S):' % len(nonfin_idcs)
         differences.append(indent + difference)
-        show_violations(v1, a, b, nonfin_idcs, indent, differences)
+        show_violations(v1, nonfin_idcs, indent, differences)
 
     if abs_max_violation is not None:
         difference = '    MAXIMUM ABSOLUTE VIOLATION: %s' % abs_max_violation
         differences.append(indent + difference)
-        show_violations(v1, a, b, abs_max_idcs, indent, differences)
+        show_violations(v1, abs_max_idcs, indent, differences)
 
     if rel_max_violation is not None:
         difference = '    MAXIMUM RELATIVE VIOLATION: %s' % rel_max_violation
         differences.append(indent + difference)
-        show_violations(v1, a, b, rel_max_idcs, indent, differences)
+        show_violations(v1, rel_max_idcs, indent, differences)
 
     if combined_violations is not None:
         difference = '    TOTAL NUMBER OF VIOLATIONS: %s' % combined_violations
         differences.append(indent + difference)
         difference = '      FIRST %s OCCURRENCE(S):' % len(combined_idcs)
         differences.append(indent + difference)
-        show_violations(v1, a, b, combined_idcs, indent, differences)
+        show_violations(v1, combined_idcs, indent, differences)
 
     return differences
 
@@ -486,6 +464,7 @@ def compare_chunk(a, b, args):
     if len(violations[0]):
         nonfin_violations = len(violations[0])
         nonfin_idcs = sorted(zip(*violations))[:max_values]
+        nonfin_idcs = [(t, a[t], b[t]) for t in nonfin_idcs]
     else:
         nonfin_violations = None
         nonfin_idcs = None
@@ -532,6 +511,7 @@ def compare_chunk(a, b, args):
         rel_max_violation = np.amax(reldiff)
         rel_max_idcs = (reldiff == rel_max_violation).nonzero()
         rel_max_idcs = sorted(zip(*rel_max_idcs))[:max_values]
+        rel_max_idcs = [(t, a[t], b[t]) for t in rel_max_idcs]
     else:
         rel_max_violation = None
         rel_max_idcs = None
@@ -547,7 +527,7 @@ def compare_chunk(a, b, args):
 
     if violations:
         combined_violations = len(violations)
-        combined_idcs = violations[:max_values]
+        combined_idcs = [(t, a[t], b[t]) for t in violations[:max_values]]
 
     else:
         combined_violations = None
