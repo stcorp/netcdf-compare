@@ -195,13 +195,19 @@ def compare_attribute(obj1, obj2, path, attr_name, args, indent, matches):
 
 def show_violations(v1, a, b, idcs, indent, differences):
     for t in idcs:
+        if isinstance(t[0], tuple):
+            t, aval, bval = t
+        else:
+            aval = a[t]
+            bval = b[t]
+
         if not isinstance(a, dict) and len(a.shape) == 0:
             difference = '      %s: %s, %s' % (t, a, b)
         else:
             if v1.dtype is str:
-                difference = '      %s: "%s", "%s"' % (t, a[t], b[t])
+                difference = '      %s: "%s", "%s"' % (t, aval, bval)
             else:
-                difference = '      %s: %s, %s' % (t, a[t], b[t])
+                difference = '      %s: %s, %s' % (t, aval, bval)
         differences.append(indent + difference)
 
 
@@ -337,7 +343,7 @@ def compare_array(v1, v2, args, differences, indent, field=None):
                             vlen_violations_ = (vlen_violations_ or 0) + 1
                             a[full_pos] = chunka[t]
                             b[full_pos] = chunkb[t]
-                            vlen_idcs_.append(full_pos)
+                            vlen_idcs_.append((full_pos, chunka[t], chunkb[t]))
                     else:
                         chunka_arr = np.asarray(chunka[t])
                         chunkb_arr = np.asarray(chunkb[t])
@@ -348,7 +354,7 @@ def compare_array(v1, v2, args, differences, indent, field=None):
                                 a[full_pos2] = chunka_arr[u]
                                 b[full_pos2] = chunkb_arr[u]
                                 vlen_violations_ = (vlen_violations_ or 0) + 1
-                                vlen_idcs_.append(full_pos2)
+                                vlen_idcs_.append((full_pos2, chunka_arr[u], chunkb_arr[u]))
 
                 if vlen_violations_ is not None:
                     vlen_violations = (vlen_violations or 0) + vlen_violations_
