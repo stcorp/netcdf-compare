@@ -302,11 +302,12 @@ def compare_array(v1, v2, args, differences, indent, field=None):
         # compare netcdf chunks (hyperslabs) individually
         # (avoiding insane memory usage for large arrays)
         nonfin_violations = abs_max_violation = rel_max_violation = combined_violations = None
+        vlen_violations = None
         all_abs_max_idcs = []
         all_rel_max_idcs = []
         all_combined_idcs = []
         all_nonfin_idcs = []
-        vlen_idcs = []
+        all_vlen_idcs = []
 
         a = {}
         b = {}
@@ -324,16 +325,19 @@ def compare_array(v1, v2, args, differences, indent, field=None):
 
             # vlen (str/object) array
             if chunka.dtype == object:
+                vlen_violations_ = None
+                vlen_idcs_ = []
+
                 idcs = []
                 for t in zip(*[idcs.flat for idcs in np.indices(chunka.shape)]):  # TODO slow for now: per-vlen-object
                     full_pos = tuple(pos[i]+t[i] for i in range(len(pos)))
 
                     if v1.dtype is str:
                         if chunka[t] != chunkb[t]:
-                            vlen_violations = (vlen_violations or 0) + 1
+                            vlen_violations_ = (vlen_violations_ or 0) + 1
                             a[full_pos] = chunka[t]
                             b[full_pos] = chunkb[t]
-                            vlen_idcs.append(full_pos)
+                            vlen_idcs_.append(full_pos)
                     else:
                         chunka_arr = np.asarray(chunka[t])
                         chunkb_arr = np.asarray(chunkb[t])
@@ -343,8 +347,12 @@ def compare_array(v1, v2, args, differences, indent, field=None):
                                 full_pos2 = full_pos + u
                                 a[full_pos2] = chunka_arr[u]
                                 b[full_pos2] = chunkb_arr[u]
-                                vlen_violations = (vlen_violations or 0) + 1
-                                vlen_idcs.append(full_pos2)
+                                vlen_violations_ = (vlen_violations_ or 0) + 1
+                                vlen_idcs_.append(full_pos2)
+
+                if vlen_violations_ is not None:
+                    vlen_violations = (vlen_violations or 0) + vlen_violations_
+                    all_vlen_idcs.extend(vlen_idcs_)
 
                 continue
 
@@ -357,6 +365,7 @@ def compare_array(v1, v2, args, differences, indent, field=None):
             ) = compare_chunk(chunka, chunkb, args)
 
             # collect results
+
             if nonfin_violations_ is not None:
                 nonfin_violations = (nonfin_violations or 0) + nonfin_violations_
 
@@ -410,7 +419,7 @@ def compare_array(v1, v2, args, differences, indent, field=None):
     if vlen_violations is not None:
         difference = '    %d OBJECT DIFFERENCE(S):' % vlen_violations
         differences.append(indent + difference)
-        show_violations(v1, a, b, vlen_idcs, indent, differences)
+        show_violations(v1, a, b, all_vlen_idcs, indent, differences)
 
     if nonfin_violations is not None:
         difference = '    %d NON-FINITE DIFFERENCE(S)' % nonfin_violations
