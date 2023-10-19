@@ -82,6 +82,10 @@ def parse_args():
                         action='store_true',
                         help='Non-recursively compare group(s)')
 
+    parser.add_argument('-p', '--processes',
+                        type=int, default=4,
+                        help='Number of parallel processes')
+
     parser.add_argument('-s', '--structure',
                         action='store_true',
                         help='Only compare structure (not content)')
@@ -311,16 +315,19 @@ def compare_array(pool, v1, v2, args, differences, indent, var_path, field=None)
         all_vlen_idcs = []
 
         dimpos = [range(0, dim, chunkdim) for dim, chunkdim in zip(v1.shape, chunk)]
+        hyperslices = []
         for pos in itertools.product(*dimpos):
-            hyperslice = [slice(i,i+j) for i, j in zip(pos, chunk)]
+            hyperslices.append([slice(i,i+j) for i, j in zip(pos, chunk)])
 
-            (
+        args = [(hyperslice, args.file1, args.file2, var_path, field, atol, rtol, max_values, combined_tolerance) for hyperslice in hyperslices]
+
+        for (
                 vlen_violations_, vlen_idcs_,
                 nonfin_violations_, nonfin_idcs_,
                 abs_max_violation_, abs_max_idcs_,
                 rel_max_violation_, rel_max_idcs_,
                 combined_violations_, combined_idcs_,
-            ) = compare_chunk(v1, v2, hyperslice, field, atol, rtol, max_values, combined_tolerance)
+            ) in pool.map_async(compare_chunk, args).get():
 
             # merge results
             if vlen_violations_ is not None:
@@ -404,7 +411,27 @@ def compare_array(pool, v1, v2, args, differences, indent, var_path, field=None)
     return differences
 
 
-def compare_chunk(v1, v2, hyperslice, field, atol, rtol, max_values, combined_tolerance):
+open_file1 = None
+open_file2 = None
+
+def compare_chunk(args):
+    global open_file1, open_file2
+    (hyperslice, file1, file2, var_path, field, atol, rtol, max_values, combined_tolerance) = args
+
+    vlen_violations_ = nonfin_violations_ = abs_max_violations_ = rel_max_violations_ = combined_violations_ = None
+    vlen_idcs_ = []
+    nonfin_idcs_ = []
+    abs_max_idcs_ = []
+    rel_max_idcs_ = []
+    combined_idcs_ = []
+
+    if open_file1 is None:
+        open_file1 = netCDF4.Dataset(file1)
+        open_file2 = netCDF4.Dataset(file2)
+
+    v1 = open_file1[var_path]
+    v2 = open_file2[var_path]
+
     chunka = v1[hyperslice]
     chunkb = v2[hyperslice]
 
@@ -661,7 +688,7 @@ def main():
     ds2 = netCDF4.Dataset(args.file2)
 
     matches = collections.defaultdict(set)
-    with multiprocessing.Pool(4) as pool:
+    with multiprocessing.Pool(args.processes) as pool:
         differences = compare_group(pool, ds1, ds2, args, not args.groups, matches)
     if not args.quiet:
         for difference in differences:
