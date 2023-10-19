@@ -282,7 +282,7 @@ def compare_array(v1, v2, args, differences, indent, field=None):
             rel_max_violation, rel_max_idcs,
             combined_violations, combined_idcs,
 
-        ) = compare_chunk(a, b, args)
+        ) = compare_data(a, b, args)
 
     # compare array data
     else:
@@ -309,52 +309,22 @@ def compare_array(v1, v2, args, differences, indent, field=None):
         dimpos = [range(0, dim, chunkdim) for dim, chunkdim in zip(v1.shape, chunk)]
         for pos in itertools.product(*dimpos):
             hyperslice = [slice(i,i+j) for i, j in zip(pos, chunk)]
-            chunka = v1[hyperslice]
-            chunkb = v2[hyperslice]
 
-            # compound array: get specified field
-            if field is not None:  # TODO don't load all fields
-                chunka = chunka[field]
-                chunkb = chunkb[field]
-
-            # vlen (str/object) array
-            if chunka.dtype == object:
-                vlen_violations_ = None
-                vlen_idcs_ = []
-
-                idcs = []
-                for t in zip(*[idcs.flat for idcs in np.indices(chunka.shape)]):  # TODO slow for now: per-vlen-object
-                    full_pos = tuple(pos[i]+t[i] for i in range(len(pos)))
-
-                    if v1.dtype is str:
-                        if chunka[t] != chunkb[t]:
-                            vlen_violations_ = (vlen_violations_ or 0) + 1
-                            vlen_idcs_.append((full_pos, chunka[t], chunkb[t]))
-                    else:
-                        chunka_arr = np.asarray(chunka[t])
-                        chunkb_arr = np.asarray(chunkb[t])
-                        inequal_idcs = (~np.isclose(chunka_arr, chunkb_arr, args.rtol, args.atol)).nonzero()
-                        if len(inequal_idcs[0]) > 0:
-                            for u in sorted(zip(*inequal_idcs))[:max_values]:
-                                full_pos2 = full_pos + u
-                                vlen_violations_ = (vlen_violations_ or 0) + 1
-                                vlen_idcs_.append((full_pos2, chunka_arr[u], chunkb_arr[u]))
-
-                if vlen_violations_ is not None:
-                    vlen_violations = (vlen_violations or 0) + vlen_violations_
-                    all_vlen_idcs.extend(vlen_idcs_)
-
-                continue
-
-            # regular scalar array
             (
+                vlen_violations_, vlen_idcs_,
                 nonfin_violations_, nonfin_idcs_,
                 abs_max_violation_, abs_max_idcs_,
                 rel_max_violation_, rel_max_idcs_,
                 combined_violations_, combined_idcs_,
-            ) = compare_chunk(chunka, chunkb, args)
+            ) = compare_chunk(v1, v2, pos, hyperslice, field, args)
 
-            # collect results
+            # merge results
+            if vlen_violations_ is not None:
+                vlen_violations = (vlen_violations or 0) + vlen_violations_
+
+                for t, aval, bval in vlen_idcs_:
+                    full_pos = tuple(pos[i]+t[i] for i in range(len(pos)))
+                    all_vlen_idcs.append((full_pos, aval, bval))
 
             if nonfin_violations_ is not None:
                 nonfin_violations = (nonfin_violations or 0) + nonfin_violations_
@@ -386,7 +356,7 @@ def compare_array(v1, v2, args, differences, indent, field=None):
                     full_pos = tuple(pos[i]+t[i] for i in range(len(pos)))
                     all_combined_idcs.append((full_pos, aval, bval))
 
-        # merge results
+        # sort/filter final results
         abs_max_idcs = [(idx, aval, bval) for (max_, idx, aval, bval) in all_abs_max_idcs if max_ == abs_max_violation]
         abs_max_idcs = sorted(abs_max_idcs)[:max_values]
 
@@ -430,7 +400,61 @@ def compare_array(v1, v2, args, differences, indent, field=None):
     return differences
 
 
-def compare_chunk(a, b, args):
+def compare_chunk(v1, v2, pos, hyperslice, field, args):
+    chunka = v1[hyperslice]
+    chunkb = v2[hyperslice]
+
+    vlen_violations_ = nonfin_violations_ = abs_max_violations_ = rel_max_violations_ = combined_violations_ = None
+    vlen_idcs_ = []
+    nonfin_idcs_ = []
+    abs_max_idcs_ = []
+    rel_max_idcs_ = []
+    combined_idcs_ = []
+
+    # compound array: get specified field
+    if field is not None:  # TODO don't load all fields
+        chunka = chunka[field]
+        chunkb = chunkb[field]
+
+    # vlen (str/object) array
+    if chunka.dtype == object:
+        idcs = []
+        for t in zip(*[idcs.flat for idcs in np.indices(chunka.shape)]):  # TODO slow for now: per-vlen-object
+            full_pos = tuple(pos[i]+t[i] for i in range(len(pos)))
+
+            if v1.dtype is str:
+                if chunka[t] != chunkb[t]:
+                    vlen_violations_ = (vlen_violations_ or 0) + 1
+                    vlen_idcs_.append((full_pos, chunka[t], chunkb[t]))
+            else:
+                chunka_arr = np.asarray(chunka[t])
+                chunkb_arr = np.asarray(chunkb[t])
+                inequal_idcs = (~np.isclose(chunka_arr, chunkb_arr, args.rtol, args.atol)).nonzero()
+                if len(inequal_idcs[0]) > 0:
+                    for u in sorted(zip(*inequal_idcs))[:args.max_values]:
+                        full_pos2 = full_pos + u
+                        vlen_violations_ = (vlen_violations_ or 0) + 1
+                        vlen_idcs_.append((full_pos2, chunka_arr[u], chunkb_arr[u]))
+
+    # regular scalar array
+    else:
+        (
+            nonfin_violations_, nonfin_idcs_,
+            abs_max_violations_, abs_max_idcs_,
+            rel_max_violations_, rel_max_idcs_,
+            combined_violations_, combined_idcs_,
+        ) = compare_data(chunka, chunkb, args)
+
+    return (
+        vlen_violations_, vlen_idcs_,
+        nonfin_violations_, nonfin_idcs_,
+        abs_max_violations_, abs_max_idcs_,
+        rel_max_violations_, rel_max_idcs_,
+        combined_violations_, combined_idcs_,
+    )
+
+
+def compare_data(a, b, args):
     max_values = args.max_values
 
     # compare nan/inf/-inf
