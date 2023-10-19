@@ -4,6 +4,7 @@ from __future__ import print_function
 import argparse
 import collections
 import itertools
+import multiprocessing
 import os
 import warnings
 import sys
@@ -202,7 +203,7 @@ def show_violations(v1, idcs, indent, differences):
         differences.append(indent + difference)
 
 
-def compare_variable(v1, v2, args, indent, matches):
+def compare_variable(pool, v1, v2, args, indent, matches):
     # compare a single variable
     differences = []
 
@@ -239,18 +240,21 @@ def compare_variable(v1, v2, args, indent, matches):
     if isinstance(v1.datatype, netCDF4._netCDF4.CompoundType):
         for field in v1.datatype.dtype.names:
             field_diffs = []
-            compare_array(v1, v2, args, field_diffs, indent, field=field)
+            compare_array(pool, v1, v2, args, field_diffs, indent, var_path, field=field)
             if field_diffs:
                 differences.append(indent + '    FIELD ' + field)
             differences.extend(['  '+d for d in field_diffs])
     else:
-        compare_array(v1, v2, args, differences, indent)
+        compare_array(pool, v1, v2, args, differences, indent, var_path)
 
     return differences
 
 
-def compare_array(v1, v2, args, differences, indent, field=None):
+def compare_array(pool, v1, v2, args, differences, indent, var_path, field=None):
     max_values = args.max_values
+    atol = args.atol
+    rtol = args.rtol
+    combined_tolerance = args.combined_tolerance
 
     vlen_violations = None
 
@@ -282,7 +286,7 @@ def compare_array(v1, v2, args, differences, indent, field=None):
             rel_max_violation, rel_max_idcs,
             combined_violations, combined_idcs,
 
-        ) = compare_data(a, b, args)
+        ) = compare_data(a, b, atol, rtol, max_values, combined_tolerance)
 
     # compare array data
     else:
@@ -316,7 +320,7 @@ def compare_array(v1, v2, args, differences, indent, field=None):
                 abs_max_violation_, abs_max_idcs_,
                 rel_max_violation_, rel_max_idcs_,
                 combined_violations_, combined_idcs_,
-            ) = compare_chunk(v1, v2, hyperslice, field, args)
+            ) = compare_chunk(v1, v2, hyperslice, field, atol, rtol, max_values, combined_tolerance)
 
             # merge results
             if vlen_violations_ is not None:
@@ -400,7 +404,7 @@ def compare_array(v1, v2, args, differences, indent, field=None):
     return differences
 
 
-def compare_chunk(v1, v2, hyperslice, field, args):
+def compare_chunk(v1, v2, hyperslice, field, atol, rtol, max_values, combined_tolerance):
     chunka = v1[hyperslice]
     chunkb = v2[hyperslice]
 
@@ -427,9 +431,9 @@ def compare_chunk(v1, v2, hyperslice, field, args):
             else:
                 chunka_arr = np.asarray(chunka[t])
                 chunkb_arr = np.asarray(chunkb[t])
-                inequal_idcs = (~np.isclose(chunka_arr, chunkb_arr, args.rtol, args.atol)).nonzero()
+                inequal_idcs = (~np.isclose(chunka_arr, chunkb_arr, rtol, atol)).nonzero()
                 if len(inequal_idcs[0]) > 0:
-                    for u in sorted(zip(*inequal_idcs))[:args.max_values]:
+                    for u in sorted(zip(*inequal_idcs))[:max_values]:
                         full_pos2 = t + u
                         vlen_violations_ = (vlen_violations_ or 0) + 1
                         vlen_idcs_.append((full_pos2, chunka_arr[u], chunkb_arr[u]))
@@ -441,7 +445,7 @@ def compare_chunk(v1, v2, hyperslice, field, args):
             abs_max_violations_, abs_max_idcs_,
             rel_max_violations_, rel_max_idcs_,
             combined_violations_, combined_idcs_,
-        ) = compare_data(chunka, chunkb, args)
+        ) = compare_data(chunka, chunkb, atol, rtol, max_values, combined_tolerance)
 
     return (
         vlen_violations_, vlen_idcs_,
@@ -452,9 +456,7 @@ def compare_chunk(v1, v2, hyperslice, field, args):
     )
 
 
-def compare_data(a, b, args):
-    max_values = args.max_values
-
+def compare_data(a, b, atol, rtol, max_values, combined_tolerance):
     # compare nan/inf/-inf
     aa = a.copy()
     bb = b.copy()
@@ -513,7 +515,7 @@ def compare_data(a, b, args):
         absaminb = abs(aa - bb)
 
     # compare using absolute tolerance
-    aviolations = (absaminb > args.atol).nonzero()
+    aviolations = (absaminb > atol).nonzero()
 
     if len(aviolations[0]):
         abs_max_violation = np.amax(absaminb)
@@ -527,7 +529,7 @@ def compare_data(a, b, args):
     # compare using relative tolerance
     reldiff = absaminb / np.minimum(np.abs(aa), np.abs(bb))
     absaminb = None
-    rviolations = (reldiff > args.rtol).nonzero()
+    rviolations = (reldiff > rtol).nonzero()
 
     if len(rviolations[0]):
         rel_max_violation = np.amax(reldiff)
@@ -541,7 +543,7 @@ def compare_data(a, b, args):
     reldiff = None
 
     # logically combine absolute/relative checks
-    if args.combined_tolerance:
+    if combined_tolerance:
         violations = set(zip(*aviolations)) & set(zip(*rviolations))
     else:
         violations = set(zip(*aviolations)) | set(zip(*rviolations))
@@ -584,7 +586,7 @@ def compare_attributes(obj1, obj2, path, args, indent, matches):
     return differences
 
 
-def compare_variables(group1, group2, args, indent, matches):
+def compare_variables(pool, group1, group2, args, indent, matches):
     # compare variables, including attributes
     differences = []
 
@@ -598,7 +600,7 @@ def compare_variables(group1, group2, args, indent, matches):
         for var in vars1 & vars2:
             v1, v2 = group1[var], group2[var]
 
-            var_differences = compare_variable(v1, v2, args, indent, matches)
+            var_differences = compare_variable(pool, v1, v2, args, indent, matches)
 
             if var_differences or args.verbose:
                 var_differences.insert(0, indent + '  VAR %s' % var)
@@ -607,7 +609,7 @@ def compare_variables(group1, group2, args, indent, matches):
     return differences
 
 
-def compare_group(group1, group2, args, check_group, matches, indent=''):
+def compare_group(pool, group1, group2, args, check_group, matches, indent=''):
     # compare group (recursively)
     differences = []
 
@@ -621,7 +623,7 @@ def compare_group(group1, group2, args, check_group, matches, indent=''):
         return differences
 
     if check_group:
-        var_differences = compare_variables(group1, group2, args, indent,
+        var_differences = compare_variables(pool, group1, group2, args, indent,
                                             matches)
         differences.extend(var_differences)
 
@@ -641,7 +643,7 @@ def compare_group(group1, group2, args, check_group, matches, indent=''):
         if args.non_recursive:
             check_group = False
         g1, g2 = group1[group], group2[group]
-        group_differences = compare_group(g1, g2, args, check_group,
+        group_differences = compare_group(pool, g1, g2, args, check_group,
                                           matches, new_indent)
         differences.extend(group_differences)
 
@@ -659,7 +661,8 @@ def main():
     ds2 = netCDF4.Dataset(args.file2)
 
     matches = collections.defaultdict(set)
-    differences = compare_group(ds1, ds2, args, not args.groups, matches)
+    with multiprocessing.Pool(4) as pool:
+        differences = compare_group(pool, ds1, ds2, args, not args.groups, matches)
     if not args.quiet:
         for difference in differences:
             print(difference)
