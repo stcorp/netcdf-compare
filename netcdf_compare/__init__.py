@@ -300,7 +300,7 @@ def compare_array(pool, v1, v2, args, differences, indent, var_path, field=None)
         # determine chunk size
         chunk = v1.chunking()
 
-        if chunk == 'contiguous':
+        if chunk == 'contiguous' or chunk is None:
             if len(v1.shape) == 1:
                 chunk = (1000000,)
             else:
