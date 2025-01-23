@@ -182,7 +182,10 @@ def compare_attribute(obj1, obj2, path, attr_name, args, indent, matches):
 
     # TODO strings: show from position with difference (and cut off)
     try:
-        different = not np.array_equal(a, b)
+        if type(a) is str or type(b) is str:
+            different = not np.array_equal(a, b)
+        else:
+            different = not np.array_equal(a, b, equal_nan=True)
     except:
         if not args.no_warnings:
             warnings.warn('cannot compare content for attribute %s' % \
