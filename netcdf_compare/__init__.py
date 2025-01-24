@@ -203,6 +203,7 @@ def compare_attribute(obj1, obj2, path, attr_name, args, indent, matches):
 
 def show_violations(v1, idcs, indent, differences):
     for t, aval, bval in idcs:
+        t = tuple(int(x) for x in t)
         if v1.dtype is str:
             difference = '      %s: "%s", "%s"' % (t, aval, bval)
         else:
